@@ -99,7 +99,7 @@ begin
     else
       case id_opcode_class is
         when BRANCH | MOVEI2S =>
-          if (    id_ex_opcode_class = LOAD
+          if (    id_ex_opcode_class = LOAD		--Example: LOAD R1,R5(0); BEQZ R1,label
                or id_ex_opcode_class = RR_ALU
                or id_ex_opcode_class = IM_ALU 
                or id_ex_opcode_class = MOVES2I ) 
@@ -113,10 +113,17 @@ begin
           then
             stall <= '1';
           end if;
-        
-        -- =================================================
-        -- Your code goes here (LOAD, STORE, RR_ALU, IM_ALU)
-        -- =================================================
+		  when LOAD | RR_ALU | IM_ALU =>				--Example: LOAD R1,R5(0);ADD R3,R1,R6
+		    if (id_ex_opcode_class = LOAD and id_ir_rs1 = id_ex_reg_rd)	--Both stall and forwarding necessary
+			 then
+				stall <= '1';							--Stall handled here,forward will be handled soon
+			 end if;
+		  when STORE =>
+			 if (id_ex_opcode_class = LOAD and (id_ir_rs1 = id_ex_reg_rd or id_ir_rs2 = id_ex_reg_rd)) 
+			 then		--Again,both stalling and forwarding necessary
+				stall <= '1';							
+			 end if;
+
   
         when others =>
           -- Do Nothing
@@ -166,10 +173,57 @@ begin
     -- Forward EX/MEM -> EX (LOAD/STORE/RR_ALU/IM_ALU)
     -- ===============================================
     case id_ex_opcode_class is
-      -- ===============================
-      -- Your code goes here
-      -- ===============================
+      when RR_ALU =>
+		  if(ex_mem_opcode_class = RR_ALU or ex_mem_opcode_class=IM_ALU)   
+		  then
+				if(ex_mem_reg_rd = id_ex_ir_rs1) then			--Example: ADD R1,R2,R3; ADD R4,R1,R5
+					ex_alu_opa_sel <= FWDSEL_EX_MEM_ALU_OUT;
+				elsif (ex_mem_reg_rd = id_ex_ir_rs2) then		--Example: ADD R1,R2,R3; ADD R4,R5,R1
+					ex_alu_opb_sel <= FWDSEL_EX_MEM_ALU_OUT;
+				end if;
+			end if;
+			
+			if(mem_wb_opcode_class = LOAD) then				
+				if(mem_wb_reg_rd = id_ex_ir_rs1) then			--Example: LOAD R1,R5(0);ADD R3,R1,R6 (Both stall and forwarding applies)
+					ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
+				elsif (mem_wb_reg_rd = id_ex_ir_rs2) then		--Example: LOAD R1,R5(0);ADD R3,R6,R1
+					ex_alu_opb_sel <= FWDSEL_MEM_WB_DATA;
+				end if;
+			end if;
+		
+		when IM_ALU =>
+			if(ex_mem_opcode_class = RR_ALU or ex_mem_opcode_class=IM_ALU)   --Example: ADD R1,R2,R3; ADDI R5,R1,0
+					and ex_mem_reg_rd <= id_ex_ir_rs1 
+			then
+					ex_alu_opa_sel <= FWDSEL_EX_MEM_ALU_OUT;
+			end if;
+		  
+			if(mem_wb_opcode_class = LOAD) and mem_wb_reg_rd = id_ex_ir_rs1 then		--Example: LOAD R1,R2(0);ADD R3,R1,R5
+					ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
+			end if;
+			
+		
+		when LOAD =>	--decode stalled by one cycle,now it is time to forward	
+			if(mem_wb_opcode_class = LOAD and mem_wb_reg_rd = id_ex_ir_rs1) then		--Example: LOAD R1,R2(0);LOAD R3,R1(0)
+				ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
+				
+			elsif (ex_mem_opcode_class = RR_ALU or ex_mem_opcode_class=IM_ALU)   	--Example: ADD R1,R2,R3; LOAD R4,R1(0)
+				and ex_mem_reg_rd = id_ex_ir_rs1  then
+				 ex_alu_opa_sel <= FWDSEL_EX_MEM_ALU_OUT;
+			end if;
       
+		when STORE =>
+			if(mem_wb_opcode_class = LOAD and mem_wb_reg_rd = id_ex_ir_rs1) then		--Example: LOAD R1,R2(0); STORE R3,R1(0)
+				ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
+				
+			elsif (ex_mem_opcode_class = RR_ALU or ex_mem_opcode_class=IM_ALU)   	--Example: ADD R1,R2,R3; STORE R1
+				and (ex_mem_reg_rd = id_ex_ir_rs1 or ex_mem_reg_rd = id_ex_reg_rd)  then
+				 ex_alu_opa_sel <= FWDSEL_EX_MEM_ALU_OUT;
+			end if;
+			
+			
+			
+			
       when others =>
         -- Do Nothing
     end case;
@@ -177,7 +231,7 @@ begin
     -- =============================
     -- Forward MEM/WB -> MEM (STORE)
     -- =============================
-    case ex_mem_opcode_class is
+    case ex_mem_opcode_class is			--case where store followed by a load  has the same dest. register
       when STORE =>
         case mem_wb_opcode_class is
           when LOAD =>
