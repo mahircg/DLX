@@ -176,10 +176,12 @@ begin
       when RR_ALU =>
 		  if(ex_mem_opcode_class = RR_ALU or ex_mem_opcode_class=IM_ALU)   
 		  then
-				if(ex_mem_reg_rd = id_ex_ir_rs1) then			--Example: ADD R1,R2,R3; ADD R4,R1,R5
-					ex_alu_opa_sel <= FWDSEL_EX_MEM_ALU_OUT;
-				elsif (ex_mem_reg_rd = id_ex_ir_rs2) then		--Example: ADD R1,R2,R3; ADD R4,R5,R1
-					ex_alu_opb_sel <= FWDSEL_EX_MEM_ALU_OUT;
+				if(ex_mem_reg_rd /= "00000") then
+					if(ex_mem_reg_rd = id_ex_ir_rs1) then			--Example: ADD R1,R2,R3; ADD R4,R1,R5
+						ex_alu_opa_sel <= FWDSEL_EX_MEM_ALU_OUT;
+					elsif (ex_mem_reg_rd = id_ex_ir_rs2) then		--Example: ADD R1,R2,R3; ADD R4,R5,R1
+						ex_alu_opb_sel <= FWDSEL_EX_MEM_ALU_OUT;
+					end if;
 				end if;
 			end if;
 			
@@ -193,12 +195,12 @@ begin
 		
 		when IM_ALU =>
 			if(ex_mem_opcode_class = RR_ALU or ex_mem_opcode_class=IM_ALU)   --Example: ADD R1,R2,R3; ADDI R5,R1,0
-					and ex_mem_reg_rd <= id_ex_ir_rs1 
+					and (ex_mem_reg_rd = id_ex_ir_rs1 and ex_mem_reg_rd /= "00000")
 			then
 					ex_alu_opa_sel <= FWDSEL_EX_MEM_ALU_OUT;
 			end if;
 		  
-			if(mem_wb_opcode_class = LOAD) and mem_wb_reg_rd = id_ex_ir_rs1 then		--Example: LOAD R1,R2(0);ADD R3,R1,R5
+			if(mem_wb_opcode_class = LOAD and mem_wb_reg_rd = id_ex_ir_rs1) then		--Example: LOAD R1,R2(0);ADDI R3,R1,R5
 					ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
 			end if;
 			
@@ -208,16 +210,16 @@ begin
 				ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
 				
 			elsif (ex_mem_opcode_class = RR_ALU or ex_mem_opcode_class=IM_ALU)   	--Example: ADD R1,R2,R3; LOAD R4,R1(0)
-				and ex_mem_reg_rd = id_ex_ir_rs1  then
+				 and (ex_mem_reg_rd = id_ex_ir_rs1 and ex_mem_reg_rd /= "00000")  then
 				 ex_alu_opa_sel <= FWDSEL_EX_MEM_ALU_OUT;
 			end if;
       
 		when STORE =>
-			if(mem_wb_opcode_class = LOAD and mem_wb_reg_rd = id_ex_ir_rs1) then		--Example: LOAD R1,R2(0); STORE R3,R1(0)
+			if(mem_wb_opcode_class = LOAD and mem_wb_reg_rd = id_ex_ir_rs1) then		--Example: LOAD R1,R2(0); STORE R3,R1(0) or ADD R3,R0,A;ADD R4,R0,2;SB 1(R3),R0
 				ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
 				
 			elsif (ex_mem_opcode_class = RR_ALU or ex_mem_opcode_class=IM_ALU)   	--Example: ADD R1,R2,R3; STORE R1
-				and (ex_mem_reg_rd = id_ex_ir_rs1 or ex_mem_reg_rd = id_ex_reg_rd)  then
+				and (ex_mem_reg_rd /= "00000" and (ex_mem_reg_rd = id_ex_ir_rs1 or ex_mem_reg_rd = id_ex_reg_rd))  then
 				 ex_alu_opa_sel <= FWDSEL_EX_MEM_ALU_OUT;
 			end if;
 			
