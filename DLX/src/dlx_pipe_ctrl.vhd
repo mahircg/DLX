@@ -185,7 +185,7 @@ begin
 				end if;
 			end if;
 			
-			if(mem_wb_opcode_class = LOAD) then				
+			if(mem_wb_opcode_class /= STORE and mem_wb_reg_rd /= "00000") then				
 				if(mem_wb_reg_rd = id_ex_ir_rs1) then			--Example: LOAD R1,R5(0);ADD R3,R1,R6 (Both stall and forwarding applies)
 					ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
 				elsif (mem_wb_reg_rd = id_ex_ir_rs2) then		--Example: LOAD R1,R5(0);ADD R3,R6,R1
@@ -200,13 +200,13 @@ begin
 					ex_alu_opa_sel <= FWDSEL_EX_MEM_ALU_OUT;
 			end if;
 		  
-			if(mem_wb_opcode_class = LOAD and mem_wb_reg_rd = id_ex_ir_rs1) then		--Example: LOAD R1,R2(0);ADDI R3,R1,R5
+			if(mem_wb_opcode_class /= STORE and mem_wb_reg_rd = id_ex_ir_rs1 and mem_wb_reg_rd /= "00000") then		--Example: LOAD R1,R2(0);ADDI R3,R1,R5
 					ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
 			end if;
 			
 		
 		when LOAD =>	--decode stalled by one cycle,now it is time to forward	
-			if(mem_wb_opcode_class = LOAD and mem_wb_reg_rd = id_ex_ir_rs1) then		--Example: LOAD R1,R2(0);LOAD R3,R1(0)
+			if(mem_wb_opcode_class /= STORE and mem_wb_reg_rd = id_ex_ir_rs1 and mem_wb_reg_rd /= "00000") then		--Example: LOAD R1,R2(0);LOAD R3,R1(0)
 				ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
 				
 			elsif (ex_mem_opcode_class = RR_ALU or ex_mem_opcode_class=IM_ALU)   	--Example: ADD R1,R2,R3; LOAD R4,R1(0)
@@ -215,7 +215,7 @@ begin
 			end if;
       
 		when STORE =>
-			if(mem_wb_opcode_class = LOAD and mem_wb_reg_rd = id_ex_ir_rs1) then		--Example: LOAD R1,R2(0); STORE R3,R1(0) or ADD R3,R0,A;ADD R4,R0,2;SB 1(R3),R0
+			if(mem_wb_opcode_class /= STORE and mem_wb_reg_rd = id_ex_ir_rs1 and mem_wb_reg_rd /= "00000") then		--Example: LOAD R1,R2(0); STORE R3,R1(0) or ADD R3,R0,A;ADD R4,R0,2;SB 1(R3),R0
 				ex_alu_opa_sel <= FWDSEL_MEM_WB_DATA;
 				
 			elsif (ex_mem_opcode_class = RR_ALU or ex_mem_opcode_class=IM_ALU)   	--Example: ADD R1,R2,R3; STORE R1
