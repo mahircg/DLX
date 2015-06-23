@@ -113,12 +113,12 @@ begin
           then
             stall <= '1';
           end if;
-		  when LOAD | RR_ALU | IM_ALU =>				--Example: LOAD R1,R5(0);ADD R3,R1,R6
+		  when LOAD | IM_ALU =>				--Example: LOAD R1,R5(0);ADD R3,R1,R6
 		    if (id_ex_opcode_class = LOAD and id_ir_rs1 = id_ex_reg_rd)	--Both stall and forwarding necessary
 			 then
 				stall <= '1';							--Stall handled here,forward will be handled soon
 			 end if;
-		  when STORE =>
+		  when STORE | RR_ALU =>
 			 if (id_ex_opcode_class = LOAD and (id_ir_rs1 = id_ex_reg_rd or id_ir_rs2 = id_ex_reg_rd)) 
 			 then		--Again,both stalling and forwarding necessary
 				stall <= '1';							
