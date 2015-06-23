@@ -177,21 +177,17 @@ begin
 		id_opcode_class_int		<= BRANCH;
 		
 		when op_beqz =>
+		id_opcode_class_int  <= BRANCH;
 		if(id_a_fwd = X"00000000") then
 			id_npc					<= if_id_npc + imm16;
 			id_cond					<= '1';
-			id_opcode_class_int  <= BRANCH;
-		else
-			NULL;
 		end if;
 		
 		when op_bnez =>
+		id_opcode_class_int  <= BRANCH;
 		if(id_a_fwd /= X"00000000") then
 			id_npc					<= if_id_npc + imm16;
 			id_cond					<= '1';
-			id_opcode_class_int  <= BRANCH;
-		else
-			NULL;
 		end if;
 		
 		when op_trap =>
@@ -227,7 +223,10 @@ begin
 			
 		when op_sh =>
 			id_opcode_class_int		<= STORE;
-			
+		
+		when op_sw =>
+			id_opcode_class_int		<= STORE;
+		
 		when op_addi =>
 			id_opcode_class_int		<= IM_ALU;
 			
@@ -465,6 +464,15 @@ begin
 						id_ex_us_sel       	<= SEL_SIGNED;
 						id_ex_alu_func			<= alu_add;		
 					
+					when op_sw =>
+						id_ex_dm_en				<= '1';
+						id_ex_dm_wen			<= '1';
+						id_ex_reg_rd			<= if_id_ir_rd_itype;
+						id_ex_alu_opb_sel 	<= SEL_ID_EX_IMM;
+						id_ex_dm_width			<= MEM_WIDTH_WORD;
+						id_ex_us_sel       	<= SEL_SIGNED;
+						id_ex_alu_func			<= alu_add;	
+						
 					when op_addi =>
 						id_ex_alu_opb_sel 	<= SEL_ID_EX_IMM;
 						id_ex_reg_rd			<= if_id_ir_rd_itype;
