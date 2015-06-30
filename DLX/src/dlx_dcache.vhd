@@ -177,21 +177,23 @@ begin
 	-- ===========================================
 	-- Your code goes here:
 	
-	read_process: process(dc_write,dc_enable,dc_width, -- DXL signals
+	read_process: process(dc_write,dc_enable,dc_width, memctrl_busy, -- DXL signals & memory controller
 						  addr_tag,addr_word,addr_byte, -- address signals
 						  set0_tag,set0_line,set0_valid, -- 1st line of set
 						  set1_tag,set1_line,set1_valid) -- 2nd line of set
 	begin
+		
 		set0_hit<='0'; -- by default no hit 1st line
 		set1_hit<='0'; -- by default no hit 2nd line
-        -- determine hit or miss
+		
+		-- determine hit or miss
 		if (addr_tag= set0_tag and set0_valid= '1') then -- valid data is in first line of the selected set
 				set0_hit<='1'; -- hit!!!
 		elsif(addr_tag= set1_tag and set1_valid='1') then -- valid data is in second line of the selected set
 				set1_hit<='1'; -- hit!!!		
 		end if;-- else ???
 		
-		if (dc_write='0' and dc_enable='1') then -- if read request and cache is enabled
+		if (dc_write='0' and dc_enable='1' and memctrl_busy/='1') then -- if read request and memory controller is not busy
 		   -- dc_ready<='0'; -- by default cache is not ready
 			if set0_hit<='1' then -- valid data is in first line of the selected set
 				dc_rdata<=align(set0_line, addr_word, addr_byte, dc_width); -- return aligned byte to DXL read bus
@@ -201,6 +203,7 @@ begin
 				--dc_ready<= '1';-- inform DXL cache is ready
 			end if;-- else ???
 		end if;	-- else write request
+
 	end process read_process;
 	-- !!!! this process drives set#_hit signals and dc_rdata !!!!	
 	
@@ -221,28 +224,26 @@ begin
 							set0_tag,set0_line,set0_valid, -- 1st line of set
 							set1_tag,set1_line,set1_valid) -- 2nd line of set
 	begin
-		set0_write<='0'; -- send to ram0 read request
-		set1_write<='0'; -- send to ram1 read request
-		 
-		if set0_hit='1' or set1_hit='1' then -- it's a hit!!!  
-			if ( dc_write='1' and dc_enable='1') then -- it's a write request!!
-				setX_in( 0 )<= '1';-- set valid
-				setX_in( 1 to bw_dc_tag )<= addr_tag;-- set tag
-				if set0_hit='1' then
-					setX_in( bw_dc_tag + 1 to bw_cacheline + bw_dc_tag )<=update(set0_line,dc_wdata,addr_word,addr_byte,dc_width);-- update line0
-               set0_write<='1';-- write enable ram0
-				else 
-				   setX_in( bw_dc_tag + 1 to bw_cacheline + bw_dc_tag )<=update(set1_line,dc_wdata,addr_word,addr_byte,dc_width);-- update line1
-               set1_write<='1';-- write enable ram1
-      		end if;
-  	   	end if;
- 	  end if;
+		set0_write<='0'; -- set ram0 write enable=0 by default
+		set1_write<='0'; -- set ram1 write enable=0 by default
+		
+		-- check for write request:
+		if ( dc_write='1' and dc_enable='1' and memctrl_busy/='1') then -- it's a write request and memory controller isn't busy
+		    -- in case of write hit update proper cache line :
+			if set0_hit='1' then 
+				setX_in <= '1'& addr_tag& update(set0_line,dc_wdata,addr_word,addr_byte,dc_width);-- update line0
+				set0_write <= '1';-- write enable to ram0
+			elsif set1_hit='1' then 
+				setX_in <= '1'& addr_tag& update(set1_line,dc_wdata,addr_word,addr_byte,dc_width);-- update line1
+				set1_write <= '1';-- write enable to ram1
+			end if;
+  	   	end if;-- don't do anything i case of write miss 
  	    
-		if dc_update='1' and dc_write='0' then -- read miss 
-			setX_in( 0 )<= '1';-- set valid
-			setX_in( 1 to bw_dc_tag )<= addr_tag;-- set tag
-			setX_in( bw_dc_tag + 1 to bw_cacheline + bw_dc_tag )<= cache_line; -- update line 
-		  set0_write<=not rand_bit;
+ 	    
+		if dc_update='1' and dc_write='0' then -- in case of read miss update cache
+		    -- update random cache line:
+			setX_in <= '1'& addr_tag& cache_line; 
+			set0_write<=not rand_bit;
 			set1_write<=rand_bit;      
 		end if;
 	end process update_process;
@@ -262,7 +263,7 @@ begin
 	  --dc_ready='1';
 		if (set0_hit='0' and set1_hit='0') and dc_enable='1' and dc_write='0' then -- stall only if read miss
 			dc_ready<='0';
-		else -- memory busy
+		else 
 			dc_ready<='1'; 
     end if;
 	end process ready_process;
