@@ -96,7 +96,7 @@ architecture behavior of dlx_dcache is
   signal set0_write  :  std_logic := '0';
   signal set1_write  :  std_logic := '0';
 
-  -- Signale zur Aufsplittung der Cache-RAM-Ausgänge ---------------------------
+  -- Signale zur Aufsplittung der Cache-RAM-Ausgï¿½ge ---------------------------
   signal set0_tag    :  std_logic_vector( bw_dc_tag - 1 downto 0 );
   signal set0_line   :  std_logic_vector( 0 to bw_cacheline - 1 );
   signal set0_valid  :  std_logic;
@@ -151,7 +151,7 @@ begin
 
 
   -- =================================================================
-  -- Aufsplittung der Cache-RAM-Ausgänge (Tag, Line u. Vaild-Bit)
+  -- Aufsplittung der Cache-RAM-Ausgï¿½ge (Tag, Line u. Vaild-Bit)
   -- =================================================================
   set0_valid  <= set0_out( 0 );
   set0_tag    <= set0_out( 1 to bw_dc_tag );
@@ -174,36 +174,132 @@ begin
   -- Cache-Read-Access (nicht getaktet!)
   -- =================================================================
 
-      -- ===========================================
-      -- Your code goes here
-      -- ===========================================
+	-- ===========================================
+	-- Your code goes here:
+	
+	read_process: process(dc_write,dc_enable,dc_width, -- DXL signals
+						  addr_tag,addr_word,addr_byte, -- address signals
+						  set0_tag,set0_line,set0_valid, -- 1st line of set
+						  set1_tag,set1_line,set1_valid) -- 2nd line of set
+	begin
+		set0_hit<='0'; -- by default no hit 1st line
+		set1_hit<='0'; -- by default no hit 2nd line
+        -- determine hit or miss
+		if (addr_tag= set0_tag and set0_valid= '1') then -- valid data is in first line of the selected set
+				set0_hit<='1'; -- hit!!!
+		elsif(addr_tag= set1_tag and set1_valid='1') then -- valid data is in second line of the selected set
+				set1_hit<='1'; -- hit!!!		
+		end if;-- else ???
+		
+		if (dc_write='0' and dc_enable='1') then -- if read request and cache is enabled
+		   -- dc_ready<='0'; -- by default cache is not ready
+			if set0_hit<='1' then -- valid data is in first line of the selected set
+				dc_rdata<=align(set0_line, addr_word, addr_byte, dc_width); -- return aligned byte to DXL read bus
+				--dc_ready<= '1';-- inform DXL cache is ready
+			elsif set1_hit<='1' then -- valid data is in second line of the selected set	
+				dc_rdata<=align(set1_line, addr_word, addr_byte, dc_width); -- return aligned byte to DXL read bus
+				--dc_ready<= '1';-- inform DXL cache is ready
+			end if;-- else ???
+		end if;	-- else write request
+	end process read_process;
+	-- !!!! this process drives set#_hit signals and dc_rdata !!!!	
+	
+	-- END.
+	-- ===========================================
 
 
   -- =================================================================
-  -- Cache-Update-Access (nicht getaktet!)
+  -- Cache-Update-Access (nicht getaktet!) not clocked!
   -- =================================================================
 
-      -- ===========================================
-      -- Your code goes here
-      -- ===========================================
+	-- ===========================================
+	-- Your code goes here:
+	
+	update_process: process(dc_write,dc_enable,dc_width, -- DXL signals
+							dc_update,cache_line,memctrl_busy, -- memory signals
+							addr_tag,addr_word,addr_byte, -- address signals
+							set0_tag,set0_line,set0_valid, -- 1st line of set
+							set1_tag,set1_line,set1_valid) -- 2nd line of set
+	begin
+		set0_write<='0'; -- send to ram0 read request
+		set1_write<='0'; -- send to ram1 read request
+		 
+		if set0_hit='1' or set1_hit='1' then -- it's a hit!!!  
+			if ( dc_write='1' and dc_enable='1') then -- it's a write request!!
+				setX_in( 0 )<= '1';-- set valid
+				setX_in( 1 to bw_dc_tag )<= addr_tag;-- set tag
+				if set0_hit='1' then
+					setX_in( bw_dc_tag + 1 to bw_cacheline + bw_dc_tag )<=update(set0_line,dc_wdata,addr_word,addr_byte,dc_width);-- update line0
+               set0_write<='1';-- write enable ram0
+				else 
+				   setX_in( bw_dc_tag + 1 to bw_cacheline + bw_dc_tag )<=update(set1_line,dc_wdata,addr_word,addr_byte,dc_width);-- update line1
+               set1_write<='1';-- write enable ram1
+      		end if;
+  	   	end if;
+ 	  end if;
+ 	    
+		if dc_update='1' and dc_write='0' then -- read miss 
+			setX_in( 0 )<= '1';-- set valid
+			setX_in( 1 to bw_dc_tag )<= addr_tag;-- set tag
+			setX_in( bw_dc_tag + 1 to bw_cacheline + bw_dc_tag )<= cache_line; -- update line 
+		  set0_write<=not rand_bit;
+			set1_write<=rand_bit;      
+		end if;
+	end process update_process;
+	-- !!!! this process drives set#_write signals and setX_in !!!!
+	
+	-- END.
+	-- ===========================================
+
+  -- =================================================================
+  -- Cache-Read/Write-Access completed (nicht getaktet!) not clocked!
+  -- =================================================================
+
+	-- ===========================================
+	-- Your code goes here:
+	ready_process: process(dc_enable,set0_hit,set1_hit,dc_write)
+	begin
+	  --dc_ready='1';
+		if (set0_hit='0' and set1_hit='0') and dc_enable='1' and dc_write='0' then -- stall only if read miss
+			dc_ready<='0';
+		else -- memory busy
+			dc_ready<='1'; 
+    end if;
+	end process ready_process;
+	-- this process drives dc_ready signal
+	
+	-- END.
+	-- ===========================================
 
 
   -- =================================================================
-  -- Cache-Read/Write-Access completed (nicht getaktet!)
+  -- Linear Feedback Shift Register, LFSR (getaktet!)  clocked!
   -- =================================================================
-
-      -- ===========================================
-      -- Your code goes here
-      -- ===========================================
-
-
-  -- =================================================================
-  -- Linear Feedback Shift Register, LFSR (getaktet!)
-  -- =================================================================
-  rand_bit <= '0';
-  
-      -- ===========================================
-      -- Your code goes here
-      -- ===========================================
+  --rand_bit <= '0';
+      
+	-- ===========================================
+	-- Your code goes here:
+	LFSR_process: process(clk)
+	begin
+		if(rising_edge(clk)) then
+			if rst='1' then
+			   lfsr<= x"00";
+			   rand_bit <= '0';
+			else
+				rand_bit <= lfsr(0);
+				lfsr(0) <= lfsr(1);
+				lfsr(1) <= lfsr(2);
+				lfsr(2) <= lfsr(3);
+				lfsr(3) <= lfsr(4);
+				lfsr(4) <= lfsr(5);
+				lfsr(5) <= lfsr(6);
+				lfsr(6) <= lfsr(7);
+				lfsr(7) <= '1' xor lfsr(1) xor lfsr(5) xor lfsr(7) ;
+			end if;
+	end if;
+	end process LFSR_process;
+	
+	-- END.
+	-- ===========================================
 
 end behavior;

@@ -49,7 +49,9 @@ use work.dlx_global.all;
 
 entity dlx_cache_tb is
   generic(
-    ram_image_file :  string  := "asm/bubble_sort.out";
+    --ram_image_file :  string  := "asm/bubble_sort.out";
+	 ram_image_file :  string  := "/users/mep_15/tasks/EMPLab_15/DLX/asm/bubble_sort.out";
+
                                  -- Take care to choose the right file and take 
                                  -- care to choose the proper path for ram_image_file!
     clk_period :      time    := 50 ns
