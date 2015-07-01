@@ -177,33 +177,38 @@ begin
 	-- ===========================================
 	-- Your code goes here:
 	
-	read_process: process(dc_write,dc_enable,dc_width, memctrl_busy, -- DXL signals & memory controller
+	read_process: process(dc_write,dc_enable,dc_width, -- DXL signals & memory controller
 						  addr_tag,addr_word,addr_byte, -- address signals
-						  set0_tag,set0_line,set0_valid, -- 1st line of set
-						  set1_tag,set1_line,set1_valid) -- 2nd line of set
+						  set0_tag,set0_valid,set0_line, -- 1st line of set
+						  set1_tag,set1_valid,set1_line) -- 2nd line of set
+	variable hit0 : std_logic ;
+	variable hit1 : std_logic ;
 	begin
 		
-		set0_hit<='0'; -- by default no hit 1st line
-		set1_hit<='0'; -- by default no hit 2nd line
-		
+		hit0 := '0';
+		hit1 := '0';
 		-- determine hit or miss
 		if (addr_tag= set0_tag and set0_valid= '1') then -- valid data is in first line of the selected set
-				set0_hit<='1'; -- hit!!!
+				hit0:='1'; -- hit!!!
 		elsif(addr_tag= set1_tag and set1_valid='1') then -- valid data is in second line of the selected set
-				set1_hit<='1'; -- hit!!!		
+				hit1:='1';  -- hit!!!
+		else 
+			null;
 		end if;-- else ???
-		
-		if (dc_write='0' and dc_enable='1' and memctrl_busy/='1') then -- if read request and memory controller is not busy
+
+		if (dc_write='0' and dc_enable='1') then -- if read request and memory controller is not busy
 		   -- dc_ready<='0'; -- by default cache is not ready
-			if set0_hit<='1' then -- valid data is in first line of the selected set
+			if hit0 ='1' then -- valid data is in first line of the selected set
 				dc_rdata<=align(set0_line, addr_word, addr_byte, dc_width); -- return aligned byte to DXL read bus
 				--dc_ready<= '1';-- inform DXL cache is ready
-			elsif set1_hit<='1' then -- valid data is in second line of the selected set	
+			elsif hit1 ='1' then -- valid data is in second line of the selected set	
 				dc_rdata<=align(set1_line, addr_word, addr_byte, dc_width); -- return aligned byte to DXL read bus
 				--dc_ready<= '1';-- inform DXL cache is ready
 			end if;-- else ???
 		end if;	-- else write request
-
+		
+	set0_hit <= hit0;
+	set1_hit <= hit1;
 	end process read_process;
 	-- !!!! this process drives set#_hit signals and dc_rdata !!!!	
 	
@@ -221,6 +226,7 @@ begin
 	update_process: process(dc_write,dc_enable,dc_width, -- DXL signals
 							dc_update,cache_line,memctrl_busy, -- memory signals
 							addr_tag,addr_word,addr_byte, -- address signals
+							set0_hit,set1_hit,
 							set0_tag,set0_line,set0_valid, -- 1st line of set
 							set1_tag,set1_line,set1_valid) -- 2nd line of set
 	begin
@@ -236,13 +242,15 @@ begin
 			elsif set1_hit='1' then 
 				setX_in <= '1'& addr_tag& update(set1_line,dc_wdata,addr_word,addr_byte,dc_width);-- update line1
 				set1_write <= '1';-- write enable to ram1
+			else
+				null;
 			end if;
-  	   	end if;-- don't do anything i case of write miss 
+  	   end if;-- don't do anything i case of write miss 
  	    
  	    
 		if dc_update='1' and dc_write='0' then -- in case of read miss update cache
 		    -- update random cache line:
-			setX_in <= '1'& addr_tag& cache_line; 
+			setX_in <= '1'& addr_tag& cache_line;
 			set0_write<=not rand_bit;
 			set1_write<=rand_bit;      
 		end if;
