@@ -204,6 +204,8 @@ begin
 			elsif hit1 ='1' then -- valid data is in second line of the selected set	
 				dc_rdata<=align(set1_line, addr_word, addr_byte, dc_width); -- return aligned byte to DXL read bus
 				--dc_ready<= '1';-- inform DXL cache is ready
+			else
+				dc_rdata <= (others => 'X');
 			end if;-- else ???
 		end if;	-- else write request
 		
